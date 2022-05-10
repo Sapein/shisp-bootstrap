@@ -1,3 +1,4 @@
+#[derive(Debug, PartialEq)]
 pub enum TokenType {
     // Composite Tokens
     Atom(String), Number(u128), Str(String), True(bool), False(bool), UnquoteSplice,
@@ -13,6 +14,7 @@ pub enum TokenType {
     EOF
 }
 
+#[derive(Debug, PartialEq)]
 pub struct Token {
     row: usize,
     col: usize,
@@ -22,7 +24,6 @@ pub struct Token {
 
 impl Token {
     pub fn new(row: usize, col: usize, raw_characters: String) -> Token {
-
         Token {
             row: row,
             col: col,
@@ -37,12 +38,11 @@ impl Token {
                 "'" => TokenType::SingleQuote,
                 "#t" => TokenType::True(true),
                 "#f" => TokenType::False(false),
-                "\"" => TokenType::DoubleQuote,
                 "\n" => TokenType::Newline,
                 "\t" => TokenType::Tab,
+                _ if super::STR.is_match(raw_characters.as_str()) => TokenType::Str(raw_characters),
                 _ if super::NUM.is_match(raw_characters.as_str()) => TokenType::Number(raw_characters.parse::<u128>().unwrap()),
                 _ if super::COM.is_match(raw_characters.as_str()) => TokenType::Comment(raw_characters),
-                _ if super::STR.is_match(raw_characters.as_str()) => TokenType::Str(raw_characters),
                 _ => TokenType::Atom(raw_characters),
             },
 
