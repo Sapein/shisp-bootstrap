@@ -57,7 +57,7 @@ impl Token {
         }
     }
 
-    pub fn break_apart(self) -> ((usize, usize), (usize, usize), TokenType) {
+    pub fn into_raw_parts(self) -> ((usize, usize), (usize, usize), TokenType) {
         (self.row, self.col, self._type)
     }
 }
@@ -67,13 +67,35 @@ mod tests{
     use super::*;
 
     #[test]
-    fn test_breakapart() {
+    fn test_into_raw_parts() {
         let token = Token::new((0, 0), (0, 0), "(".to_string());
         let token_str = Token::new((0, 0), (0, 3) , "asdf".to_string());
         let token_num = Token::new((0, 0), (0, 2), "123".to_string());
-        assert_eq!(token.break_apart(), ((0,0), (0,0), TokenType::LeftParen));
-        assert_eq!(token_str.break_apart(), ((0, 0), (0,3), TokenType::Atom("asdf".to_string())));
-        assert_eq!(token_num.break_apart(), ((0,0), (0,2), TokenType::Number(123)))
+        assert_eq!(token.into_raw_parts(), ((0,0), (0,0), TokenType::LeftParen));
+        assert_eq!(token_str.into_raw_parts(), ((0, 0), (0,3), TokenType::Atom("asdf".to_string())));
+        assert_eq!(token_num.into_raw_parts(), ((0,0), (0,2), TokenType::Number(123)))
     }
 
+
+    fn def() -> (usize, usize) {
+        (0,0)
+    }
+
+    #[test]
+    fn test_comments() {
+        let comments = [";comment", "; comment", ";comment\n", "; comment\n\n"]
+            .map(|r| Token::new((0,0), (0,0), r.to_string()));
+        let proper_results = [
+            TokenType::Comment(";comment".to_string()),
+            TokenType::Comment("; comment".to_string()),
+            TokenType::Comment(";comment\n".to_string()),
+            TokenType::Comment("; comment\n\n".to_string()),
+        ];
+
+        let mut i = 0;
+        for comment in comments {
+            assert_eq!(comment._type, proper_results[i]);
+            i += 1;
+        }
+    }
 }

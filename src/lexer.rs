@@ -6,7 +6,7 @@ use tokens::Token;
 
 lazy_static! {
     static ref NUM: Regex = Regex::new("[1-9]+[0-9]*").unwrap();
-    static ref COM: Regex = Regex::new(r";.*\n").unwrap();
+    static ref COM: Regex = Regex::new(r";.*\n?+").unwrap();
     static ref STR: Regex = Regex::new("\"[^\"]*\"").unwrap();
     static ref WHI: Regex = Regex::new(r"\s").unwrap();
 }
