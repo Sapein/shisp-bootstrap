@@ -1,13 +1,18 @@
 use crate::lexer::tokens::{Token, TokenType};
 
+#[derive(Debug, Clone)]
+pub enum ASTError {
+    UnableToFindParent,
+}
+
 #[derive(Debug, PartialEq)]
-struct AST {
+pub struct AST {
     nodes: Vec<Node>,
     edges: Vec<Edge>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
-enum NodeType {
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum NodeType {
     Str(String),
     Atom(String),
     Comment(String),
@@ -21,17 +26,16 @@ enum NodeType {
     CloseExpr,
 }
 
-#[derive(Debug, PartialEq, Eq)]
-struct Node {
-    row: (usize, usize),
-    col: (usize, usize),
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Node {
+    pub row: (usize, usize),
+    pub col: (usize, usize),
 
-    // index: usize,
-    node_type: NodeType,
+    pub node_type: NodeType,
 }
 
-#[derive(Debug,PartialEq, Eq)]
-struct Edge {
+#[derive(Debug, PartialEq, Eq)]
+pub struct Edge {
     parent: usize,
     child: usize,
 }
@@ -44,6 +48,81 @@ impl AST {
         }
     }
 
+    pub fn get_children(&self, node: &Node) -> Vec<&Node> {
+        if self.nodes.contains(node) {
+            let index = self.nodes
+                .iter()
+                .position(|n| &n == &node)
+                .unwrap();
+            self.get_children_index(index)
+                .iter()
+                .map(|i| self.nodes.get(*i).unwrap())
+                .collect::<Vec<&Node>>()
+        } else {
+            vec![]
+        }
+    }
+
+    pub fn get_children_index(&self, node_index: usize) -> Vec<usize> {
+        match self.nodes.get(node_index) {
+            Some(_) => {
+                self.edges
+                    .iter()
+                    .filter(|e| e.parent == node_index)
+                    .map(|e| e.child)
+                    .collect()
+            }
+            None => vec![]
+        }
+    }
+
+    pub fn get_parent(&self, node: &Node) -> Option<&Node> {
+        if self.nodes.contains(node) {
+            let index = self.nodes.iter().position(|n| &n == &node).unwrap();
+            let index = self.get_parent_index(index);
+            self.nodes.get(index?)
+        } else {
+            None
+        }
+    }
+
+    pub fn get_parent_index(&self, node_index: usize) -> Option<usize> {
+        let node = self.nodes.get(node_index)?;
+        let parents: usize = self.edges
+            .iter()
+            .filter(|e| e.child == node_index)
+            .collect::<Vec<&Edge>>()
+            .get(0).unwrap()
+            .parent;
+        Some(parents)
+    }
+
+    pub fn deparent_index(self, node_index: usize) -> AST {
+        match self.nodes.get(node_index) {
+            Some(_) => {
+                let edges = self.edges
+                    .into_iter()
+                    .filter(|e| e.parent != node_index && e.child != node_index)
+                    .collect();
+                AST {
+                    edges,
+                    ..self
+                }
+
+            }
+            None => self
+        }
+    }
+
+    pub fn deparent(self, node: &Node) -> AST {
+        if self.nodes.contains(node) {
+            let index = self.nodes.iter().position(|n| &n == &node).unwrap();
+            self.deparent_index(index)
+        } else {
+            self
+        }
+    }
+
     pub fn add_base_node(self, node: Node) -> AST {
         let mut nodes = self.nodes;
         nodes.push(node);
@@ -53,7 +132,7 @@ impl AST {
         }
     }
 
-    pub fn add_child_index(self, parent_index: usize, child: Node) -> Result<AST, String> {
+    pub fn add_child_index(self, parent_index: usize, child: Node) -> Result<AST, ASTError> {
         match self.nodes.get(parent_index) {
             Some(_) => {
                 let mut nodes = self.nodes;
@@ -71,16 +150,46 @@ impl AST {
                     edges: edges,
                 })
             },
-            None => Err("Parent not found!".to_string()),
+            None => Err(ASTError::UnableToFindParent),
         }
     }
 
-    pub fn add_child(self, parent: &Node, child: Node) -> Result<AST, String> {
+    pub fn add_child(self, parent: &Node, child: Node) -> Result<AST, ASTError> {
         if self.nodes.contains(parent) {
             let index = self.nodes.iter().position(|n| &n == &parent).unwrap();
             self.add_child_index(index, child)
         } else {
-            Err("Parent not in AST!".to_string())
+            Err(ASTError::UnableToFindParent)
+        }
+    }
+
+    pub fn remove_node_index(self, node_index: usize) -> AST {
+        match self.nodes.get(node_index) {
+            Some(_) => {
+                let mut nodes = self.nodes;
+                let edges = self.edges
+                    .into_iter()
+                    .filter(|e| e.parent != node_index && e.child != node_index)
+                    .map(|e| { if e.parent > node_index { Edge { parent: e.parent - 1, child: e.child }} else { e }})
+                    .map(|e| { if e.child > node_index { Edge { parent: e.parent, child: e.child - 1 }} else { e }})
+                    .collect();
+                nodes.remove(node_index);
+                AST {
+                    edges,
+                    nodes: nodes,
+                }
+
+            }
+            None => self
+        }
+    }
+
+    pub fn remove_node(self, node: &Node) -> AST {
+        if self.nodes.contains(node) {
+            let index = self.nodes.iter().position(|n| n == node).unwrap();
+            self.remove_node_index(index)
+        } else {
+            self
         }
     }
 }
@@ -106,18 +215,17 @@ impl Node {
             TokenType::RightParen => Some(NodeType::CloseExpr),
 
             TokenType::Whitespace(_) | TokenType::Newline | TokenType::Tab => None,
-            TokenType::EOF => None, //TODO: Maybe change this?
+            TokenType::EOF => None
         }?;
 
         Some(Node {
             row,
             col,
-
-            node_type: node_type
+            node_type
         })
     }
 
-    fn new(node_type: NodeType) -> Node{
+    fn new(node_type: NodeType) -> Node {
         Node {
             row: (0,0),
             col: (0,0),
@@ -159,12 +267,70 @@ mod tests {
         }
 
         #[test]
+        fn remove_node_index() {
+            let ast = AST::new()
+                .add_base_node(make_node())
+                .remove_node_index(0);
+
+            let ast_parent = AST::new()
+                .add_base_node(make_node())
+                .add_child_index(0, make_node())
+                .unwrap()
+                .remove_node_index(0);
+
+            let ast_child = AST::new()
+                .add_base_node(make_node())
+                .add_child_index(0, make_node())
+                .unwrap()
+                .remove_node_index(1);
+
+            assert_eq!(ast.nodes, vec![]);
+            assert_eq!(ast.edges, vec![]);
+
+            assert_eq!(ast_parent.nodes, vec![make_node()]);
+            assert_eq!(ast_parent.edges, vec![]);
+
+            assert_eq!(ast_child.nodes, vec![make_node()]);
+            assert_eq!(ast_child.edges, vec![]);
+        }
+
+        #[test]
+        fn remove_node() {
+            let ast = AST::new()
+                .add_base_node(make_node())
+                .remove_node(&make_node());
+
+            let ast_parent = AST::new()
+                .add_base_node(make_node())
+                .add_child_index(0, make_node())
+                .unwrap()
+                .remove_node(&make_node());
+
+            assert_eq!(ast.nodes, vec![]);
+            assert_eq!(ast.edges, vec![]);
+
+            assert_eq!(ast_parent.nodes, vec![make_node()]);
+            assert_eq!(ast_parent.edges, vec![]);
+        }
+
+        #[test]
         fn add_child() {
             let ast = AST::new()
                 .add_base_node(make_node())
                 .add_child(&make_node(), make_node()).unwrap();
             assert_eq!(ast.nodes, vec![make_node(), make_node()]);
             assert_eq!(ast.edges, vec![Edge { parent: 0, child: 1 } ]);
+        }
+
+        #[test]
+        fn deparent_index() {
+            let ast = AST::new()
+                .add_base_node(make_node())
+                .add_child_index(0, make_node())
+                .unwrap()
+                .deparent_index(1);
+
+            assert_eq!(ast.edges, vec![]);
         }
 
         #[test]
