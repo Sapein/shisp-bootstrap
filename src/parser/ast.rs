@@ -1,4 +1,5 @@
 use crate::lexer::tokens::{Token, TokenType};
+use std::collections::HashSet;
 
 #[derive(Debug, Clone)]
 pub enum ASTError {
@@ -11,7 +12,7 @@ pub struct AST {
     edges: Vec<Edge>,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub enum NodeType {
     Str(String),
     Atom(String),
@@ -26,7 +27,7 @@ pub enum NodeType {
     CloseExpr,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct Node {
     pub row: (usize, usize),
     pub col: (usize, usize),
@@ -46,6 +47,35 @@ impl AST {
             nodes: vec![],
             edges: vec![],
         }
+    }
+
+    pub fn get_base_nodes(&self) -> HashSet<&Node> {
+        let indexes = self.get_base_node_indexes();
+        self.nodes
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| indexes.contains(i))
+            .map(|(_, n)| n)
+            .collect()
+    }
+
+    pub fn get_base_node_indexes(&self) -> HashSet<usize> {
+        let child_nodes: Vec<usize> = self.edges
+            .iter()
+            .map(|e| e.child)
+            .collect();
+        let parent_nodes: Vec<usize> = self.edges
+            .iter()
+            .map(|e| e.parent)
+            .filter(|i| !child_nodes.contains(i))
+            .collect();
+        self.nodes
+            .iter()
+            .enumerate()
+            .map(|(i, _)| i)
+            .filter(|i| !parent_nodes.contains(i) && !child_nodes.contains(i))
+            .chain(parent_nodes.clone())
+            .collect::<HashSet<usize>>()
     }
 
     pub fn get_children(&self, node: &Node) -> Vec<&Node> {
@@ -87,7 +117,7 @@ impl AST {
     }
 
     pub fn get_parent_index(&self, node_index: usize) -> Option<usize> {
-        let node = self.nodes.get(node_index)?;
+        self.nodes.get(node_index)?;
         let parents: usize = self.edges
             .iter()
             .filter(|e| e.child == node_index)
