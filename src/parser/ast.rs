@@ -9,7 +9,7 @@ pub enum ASTError {
 #[derive(Debug, PartialEq)]
 pub struct AST {
     nodes: Vec<Node>,
-    edges: Vec<Edge>,
+    edges: HashSet<Edge>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
@@ -35,7 +35,7 @@ pub struct Node {
     pub node_type: NodeType,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub struct Edge {
     parent: usize,
     child: usize,
@@ -45,7 +45,7 @@ impl AST {
     pub fn new() -> AST {
         AST {
             nodes: vec![],
-            edges: vec![],
+            edges: HashSet::new(),
         }
     }
 
@@ -60,11 +60,11 @@ impl AST {
     }
 
     pub fn get_base_node_indexes(&self) -> HashSet<usize> {
-        let child_nodes: Vec<usize> = self.edges
+        let child_nodes: HashSet<usize> = self.edges
             .iter()
             .map(|e| e.child)
             .collect();
-        let parent_nodes: Vec<usize> = self.edges
+        let parent_nodes: HashSet<usize> = self.edges
             .iter()
             .map(|e| e.parent)
             .filter(|i| !child_nodes.contains(i))
@@ -75,7 +75,7 @@ impl AST {
             .map(|(i, _)| i)
             .filter(|i| !parent_nodes.contains(i) && !child_nodes.contains(i))
             .chain(parent_nodes.clone())
-            .collect::<HashSet<usize>>()
+            .collect()
     }
 
     pub fn get_children(&self, node: &Node) -> Vec<&Node> {
@@ -96,11 +96,13 @@ impl AST {
     pub fn get_children_index(&self, node_index: usize) -> Vec<usize> {
         match self.nodes.get(node_index) {
             Some(_) => {
-                self.edges
+                let mut edges = self.edges
                     .iter()
                     .filter(|e| e.parent == node_index)
                     .map(|e| e.child)
-                    .collect()
+                    .collect::<Vec<usize>>();
+                edges.sort();
+                edges
             }
             None => vec![]
         }
@@ -122,7 +124,8 @@ impl AST {
             .iter()
             .filter(|e| e.child == node_index)
             .collect::<Vec<&Edge>>()
-            .get(0).unwrap()
+            .get(0)
+            .unwrap()
             .parent;
         Some(parents)
     }
@@ -170,7 +173,7 @@ impl AST {
 
                 nodes.push(child);
                 let child_index = nodes.iter().len() - 1;
-                edges.push(Edge {
+                edges.insert(Edge {
                     parent: parent_index,
                     child: child_index,
                 });
@@ -275,7 +278,7 @@ mod tests {
         fn test_new() {
             assert_eq!(AST::new(), AST {
                 nodes: Vec::new(),
-                edges: Vec::new()
+                edges: HashSet::new()
             })
         }
 
@@ -292,8 +295,10 @@ mod tests {
             let ast = AST::new()
                 .add_base_node(make_node())
                 .add_child_index(0, make_node()).unwrap();
+            let mut hset = HashSet::new();
+            hset.insert(Edge { parent: 0, child: 1 });
             assert_eq!(ast.nodes, vec![make_node(), make_node()]);
-            assert_eq!(ast.edges, vec![Edge { parent: 0, child: 1 } ]);
+            assert_eq!(ast.edges, hset);
         }
 
         #[test]
@@ -315,13 +320,13 @@ mod tests {
                 .remove_node_index(1);
 
             assert_eq!(ast.nodes, vec![]);
-            assert_eq!(ast.edges, vec![]);
+            assert_eq!(ast.edges, HashSet::new());
 
             assert_eq!(ast_parent.nodes, vec![make_node()]);
-            assert_eq!(ast_parent.edges, vec![]);
+            assert_eq!(ast_parent.edges, HashSet::new());
 
             assert_eq!(ast_child.nodes, vec![make_node()]);
-            assert_eq!(ast_child.edges, vec![]);
+            assert_eq!(ast_child.edges, HashSet::new());
         }
 
         #[test]
@@ -337,10 +342,10 @@ mod tests {
                 .remove_node(&make_node());
 
             assert_eq!(ast.nodes, vec![]);
-            assert_eq!(ast.edges, vec![]);
+            assert_eq!(ast.edges, HashSet::new());
 
             assert_eq!(ast_parent.nodes, vec![make_node()]);
-            assert_eq!(ast_parent.edges, vec![]);
+            assert_eq!(ast_parent.edges, HashSet::new());
         }
 
         #[test]
@@ -348,8 +353,10 @@ mod tests {
             let ast = AST::new()
                 .add_base_node(make_node())
                 .add_child(&make_node(), make_node()).unwrap();
+            let mut hset = HashSet::new();
+            hset.insert(Edge { parent: 0, child: 1 });
             assert_eq!(ast.nodes, vec![make_node(), make_node()]);
-            assert_eq!(ast.edges, vec![Edge { parent: 0, child: 1 } ]);
+            assert_eq!(ast.edges, hset);
         }
 
         #[test]
@@ -360,7 +367,7 @@ mod tests {
                 .unwrap()
                 .deparent_index(1);
 
-            assert_eq!(ast.edges, vec![]);
+            assert_eq!(ast.edges, HashSet::new());
         }
 
         #[test]
